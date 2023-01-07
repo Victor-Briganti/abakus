@@ -39,54 +39,60 @@ int iseol(int c) {
     if (c == 0) {
         return 1;
     }
+
     return 0;
 }
 
 // Token generator
 int Tokenizer() {
-    while (Expr[iE]) {
-        // Remove the whitespaces
-        while (isblank(Expr[iE])) {
-            iE++;
-            if (iseol(Expr[iE])) {
-                return token_eol;
-            }
-        }
-        
-        // Verify if is a digit
-        // [0-9]+ : Integer
-        // [0-9]+[.][0-9]* : Double 
-        if (isdigit(Expr[iE])) {
-            std::string Buffer;
-            bool FloatFlag = false;
-            while (isdigit(Expr[iE])) {
-                Buffer += Expr[iE];
-                iE++;
-                if (Expr[iE] == '.' && !FloatFlag) {
-                    FloatFlag = true;
-                    Buffer += Expr[iE];
-                    iE++;
-                }
-                if (Expr[iE] == '.' && FloatFlag) {
-                    NumDouble = strtold(Buffer.c_str(), nullptr);
-                    return token_double;
-                }
-            }
-            NumDouble = strtold(Buffer.c_str(), nullptr);
-            return token_double;
-        }
-
-        // If not a token return ASCII
-        if (isascii(Expr[iE])) {
-            int Holder = (int)Expr[iE];
-            iE++;
-            return std::move(Holder);
-        }
-    }
-    if (iseol(Expr[iE])) { 
+    // End of string
+    if (iseol(Expr[iE])) {
         return token_eol;
     }
-    return LogError("character in expression was not reconized");
+    
+    // Remove the whitespaces
+    while(isblank(Expr[iE])) {
+        iE++;
+        
+        if (iseol(Expr[iE])) {
+            return token_eol;
+        }
+
+    }
+
+    // Verify if is a digit 
+    // [0-9]+[.][0-9] : Double 
+    if (isdigit(Expr[iE])) {
+        std::string Buffer;
+        Buffer += Expr[iE];
+        iE++;
+        
+        while(true) {
+            if(!isdigit(Expr[iE])) {
+                break;
+            }
+            
+            Buffer += Expr[iE];
+            iE++;
+        }
+
+        if (Expr[iE] == '.') {
+            Buffer += Expr[iE];
+            iE++;
+            while (isdigit(Expr[iE])) {
+                Buffer  += Expr[iE];
+                iE++;
+            }
+        }
+
+        NumDouble = strtold(Buffer.c_str(), nullptr);
+        return token_double;
+    }
+    
+    // If everything fails return the character
+    int Buffer = Expr[iE];
+    iE++;
+    return Buffer;
 }
 
 // ============================================================================
@@ -397,7 +403,7 @@ int main() {
     Precedence['/'] = 20;
     Precedence['*'] = 20; 
         
-    Expr = "1+2-(3*4)*(5*6+(-7))";
+    Expr = "123+123-2*(12)";
     Result();
 
     return 0;
