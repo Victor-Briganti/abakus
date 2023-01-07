@@ -8,12 +8,6 @@
 #include <map>
 #include <memory>
 
-// Base function for log error
-int LogError(std::string Err) {
-    std::cout << "ERROR: " + Err << std::endl;
-    return 0;
-}
-
 // ============================================================================
 // ==========                         LEXER                          ==========
 // ============================================================================
@@ -99,6 +93,7 @@ int Tokenizer() {
 // ==========                ABSTRACT SYNTAX TREE                    ==========
 // ============================================================================
 
+// Class that holds the AST node of the tree.
 class OperationDoubAST {
     public:
         double LHS;
@@ -116,9 +111,9 @@ class OperationDoubAST {
 // ==========                         PARSER                         ==========
 // ============================================================================
 
-void LogErrorG (std::string Err) {
+OperationDoubAST* LogError (std::string Err) {
     std::cout << "ERROR: " + Err << std::endl;
-    exit(1);
+    return nullptr;
 }
 
 // +++++++++++++++++++++++ 
@@ -131,9 +126,7 @@ std::map<char,int> Precedence;
 // Hold the current token
 int CurToken;
 // Update the current token
-int getNextToken() { 
-    return CurToken = Tokenizer(); 
-} 
+void getNextToken() { CurToken = Tokenizer(); } 
 
 // Execute the common operations
 double Reduce(char S, double L, double R) {
@@ -149,6 +142,15 @@ double Reduce(char S, double L, double R) {
     if (S == '/') {
         return L / R;
     }
+    
+    // Error Handling
+    std::string Err;
+    Err += "'";
+    Err += S;
+    Err += "'";
+    Err += " operation not reconized";
+    LogError(Err);
+    exit(1);
 }
 
 // +++++++++++++++++++++++ 
@@ -160,7 +162,7 @@ OperationDoubAST* ParserMinus();
 OperationDoubAST* ParserExpr(char CurOp);
 OperationDoubAST* ParserParenExpr();
 
-// E ::= E(double)
+// E ::= (double)num
 OperationDoubAST* ParserDoub() {
     OperationDoubAST *E = new OperationDoubAST(NumDouble);
     return E;
@@ -168,11 +170,14 @@ OperationDoubAST* ParserDoub() {
 
 // E ::= -E
 OperationDoubAST* ParserMinus() {
+    // -E ::= num
     if (CurToken == token_double) {
         OperationDoubAST *E = new OperationDoubAST(-NumDouble);
         getNextToken(); // eat double;
         return E;
     }
+
+    // -E ::= (E)
     if (CurToken == '(') {
         OperationDoubAST *E = new OperationDoubAST;
         getNextToken(); // eat '('
@@ -185,8 +190,10 @@ OperationDoubAST* ParserMinus() {
             return E;
         }
     }
+    return LogError("illegal expression");
 }
 
+// E ::= (E)
 OperationDoubAST* ParserParenExpr() {
     OperationDoubAST *E = new OperationDoubAST; 
     
@@ -194,6 +201,9 @@ OperationDoubAST* ParserParenExpr() {
     if (CurToken == '-') {
         getNextToken(); // eat '-'
         E = ParserMinus();
+        if (!E) {
+            return E;
+        }
     }
     
     // E ::= (num)
@@ -206,13 +216,17 @@ OperationDoubAST* ParserParenExpr() {
     if (CurToken == '(') {
         getNextToken(); // eat '('
         E = ParserParenExpr();
+        if (!E) {
+            return E;
+        }
     }
 
     // Token error
     if (CurToken == token_double || CurToken == token_eol) {
-        LogErrorG("expected a ')'");
+        return LogError("expected a ')'");
     }
     
+    // E ::= (E '+' E)
     if (Precedence[CurToken]) {
         E->Op = CurToken;
         getNextToken();
@@ -231,87 +245,112 @@ OperationDoubAST* ParserParenExpr() {
                 getNextToken(); // eat operation 
                 
                 if (Precedence[CurToken] || CurToken == token_eol) {
-                    LogErrorG("illegal istruction after '('");
+                    return LogError("illegal istruction after '('");
                 }
 
                 if (CurToken == token_double) {
                     E->RHS = ParserExpr(E->Op);
+                    if (!E->RHS) {
+                        return nullptr;
+                    }
                 }
                 if (CurToken == '(') {
                     E->RHS = ParserParenExpr();
+                    if (!E->RHS) {
+                        return nullptr;
+                    }
                 }
             }
 
             if (CurToken == token_double || CurToken == token_eol) {
-                LogErrorG("expected a ')'");
+                return LogError("expected a ')'");
             }
         }
     }
     return E;
 }
 
-// E ::= E+E | E-E | E*E | E/E
+// E ::= E+E | E-E | E*E | E/E | (E)
 OperationDoubAST* ParserExpr(char CurOp) {
     OperationDoubAST *E = new OperationDoubAST;
-    // num 
+    // E ::= num. ('+' E)?
     if (CurToken == token_double) {
         getNextToken(); // eat double 
         E = ParserDoub();
     }
     
-    //.(E)
+    // E ::= (.E) ('+' E)?
     if (CurToken == '(') {
         getNextToken(); // eat '('
         E = ParserParenExpr();
-    }
-
-    // Ends of expression  
-    if (CurToken == token_eol) {
+        if(!E) {
             return E;
+        }
     }
-
-    // (E.)
+    
+    // E ::= .
+    if (CurToken == token_eol) {
+        return E;
+    }
+    
+    // E ::= (E).
     if (CurToken == ')') {
         return E;
     }
-
+    
+    // Error Handling
+    if (!E->LHS) {
+        return LogError("expected a number after operation");
+    }
+    
+    // E :: = '+'. E
     if(Precedence[CurToken]) {
         if (Precedence[CurOp] >= Precedence[CurToken]) {
             return E;
         }
-
+        
         E->Op = CurToken;
         getNextToken(); // eat operation
 
+        // Error Handling
         if (CurToken == token_eol || Precedence[CurToken]) {
-            LogErrorG("illegal instruction");
+            return LogError("illegal instruction");
         }
         
+        // E ::= E. ('+' E)?
         if (CurToken == token_double){
             E->RHS = new OperationDoubAST(NumDouble);
             getNextToken(); // eat double
         }
-
+        
+        // E ::= (.E)
         if(CurToken == '(') {
             getNextToken(); // eat '('
             E->RHS = ParserParenExpr();
+            if (!E->RHS) {
+                return nullptr;
+            }
         }
 
+        // Error Handling 
         if (CurToken == token_double) {
-            LogErrorG("expected a operation after number");
+            return LogError("expected a operation after number");
         }
-
+        
+        // E ::= .
         if (CurToken == token_eol) {
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
             return E;
         }
         
+        // E ::= (E).
         if (CurToken == ')') {
             getNextToken(); // eat ')'
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
             return E;
         }
 
+        // E ::= '+'. E
         if (Precedence[CurToken]) {
             if (Precedence[E->Op] >= Precedence[CurToken]) {
                 E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
@@ -322,73 +361,94 @@ OperationDoubAST* ParserExpr(char CurOp) {
             E->RHS->Op = CurToken;
             getNextToken(); // eat operator;
             
-            // Reduce expression to E
+            // E ::= E.
             E->RHS = ParserExpr(E->RHS->Op);
+            if (!E->RHS) {
+                return nullptr;
+            }
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
             return E;
         }
     }
+    return nullptr;
 }
 
 // num ::= E 
 double PrimaryParser() {
     OperationDoubAST *E = new OperationDoubAST;
 
-    // -E
+    // num ::= -E
     if (CurToken == '-') {
         getNextToken(); // eat '-'
         E = ParserMinus();
+        if (!E) {
+            return 0;
+        }
     }
     
-    // ( E )
+    //  num ::= (E)
     if (CurToken == '(') {
         getNextToken(); // eat '('
         E = ParserParenExpr();
+        if (!E) {
+            return 0;
+        }
     }
 
-    // num
+    // num ::= num. ('+' E)?
     if (CurToken == token_double) { 
         getNextToken(); // eat double 
         E = ParserDoub();
     }
     
-    // expression
+    // num ::= E. ('+' E)?
     if (Precedence[CurToken]) {
         if (!E->LHS) {
-            LogErrorG("illegal instruction");
+            LogError("illegal expression");
+            return 0;
         }
         
+        // num ::= E ('+'. E)?
         E->Op = CurToken;
         getNextToken(); // eat operator
         
         while(true){
             // Parse the right side
+            // num ::= E ('+' E.)? 
             E->RHS = ParserExpr(E->Op);
+            if (!E->RHS) {
+                return 0;
+            }
     
             // Reduce to the left side
+            // num ::= num. 
             if (CurToken == token_eol) {
                 return Reduce(E->Op, E->LHS, E->RHS->LHS);
             }
+            // num ::= num. ('+' E)?
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
             
             // Update the tokens
+            // num ::= num ('+'. E)?
             E->Op = CurToken;
             getNextToken(); // eat operator;
         }
     }
 
+    // Error with expression
     if(!E) {
-        LogErrorG("expression was not reconized");
+        LogError("expression was not reconized");
+        return 0;
     }
 
     return E->LHS;
 }
 
-// result ::= num 
+// Prints the result
 void Result() {
     getNextToken();
     if (CurToken == token_eol) {
-        LogErrorG("expected a expression");
+        LogError("expected a expression");
     }
     if (CurToken == token_double || CurToken == '-' || CurToken == '(') {
         std::cout << PrimaryParser() << std::endl;
@@ -403,7 +463,7 @@ int main() {
     Precedence['/'] = 20;
     Precedence['*'] = 20; 
         
-    Expr = "123+123-2*(12)";
+    Expr = "-2";
     Result();
 
     return 0;
