@@ -204,12 +204,20 @@ OperationDoubAST* ParserParenExpr() {
         if (!E) {
             return E;
         }
+
+        if (CurToken == token_double) {
+            LogError("expression was not reconized");
+        }
     }
     
     // E ::= (num)
     if (CurToken == token_double) {
         getNextToken(); // eat double
         E = ParserDoub();
+
+        if (CurToken == '(') {
+            LogError("expression was not reconized");
+        }
     }
    
     // E ::= (E)
@@ -222,14 +230,14 @@ OperationDoubAST* ParserParenExpr() {
     }
 
     // Token error
-    if (CurToken == token_double || CurToken == token_eol) {
+    if (CurToken == token_double || CurToken == token_eol || CurToken == '(') {
         return LogError("expected a ')'");
     }
     
     // E ::= (E '+' E)
     if (Precedence[CurToken]) {
         E->Op = CurToken;
-        getNextToken();
+        getNextToken(); // eat operation
         E->RHS = ParserExpr(E->Op);
         
         while (true) {
@@ -240,12 +248,20 @@ OperationDoubAST* ParserParenExpr() {
             }
             
             if (Precedence[CurToken]) {
-                E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
-                E->Op = CurToken;
-                getNextToken(); // eat operation 
-                
+                // Verify the precedence to see where it can reduce
+                if (Precedence[E->Op] >= Precedence[CurToken]) {
+                    E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+                    E->Op = CurToken;
+                    getNextToken(); // eat operation 
+                    E->RHS = ParserExpr(E->Op);
+                } else {
+                    E->RHS->Op = CurToken;
+                    getNextToken(); // eat operation
+                    E->RHS = ParserExpr(E->Op);
+                }
+
                 if (Precedence[CurToken] || CurToken == token_eol) {
-                    return LogError("illegal istruction after '('");
+                    return LogError("illegal instruction after '('");
                 }
 
                 if (CurToken == token_double) {
@@ -254,18 +270,15 @@ OperationDoubAST* ParserParenExpr() {
                         return nullptr;
                     }
                 }
-                if (CurToken == '(') {
-                    E->RHS = ParserParenExpr();
-                    if (!E->RHS) {
-                        return nullptr;
-                    }
+                
+                if (CurToken == token_double || CurToken == token_eol) {
+                    return LogError("expected a ')'");
                 }
             }
-
-            if (CurToken == token_double || CurToken == token_eol) {
-                return LogError("expected a ')'");
-            }
         }
+    }
+    if (CurToken == ')') {
+        getNextToken(); // eat ')'
     }
     return E;
 }
@@ -345,7 +358,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
         
         // E ::= (E).
         if (CurToken == ')') {
-            getNextToken(); // eat ')'
+            //getNextToken(); // eat ')'
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
             return E;
         }
@@ -384,6 +397,11 @@ double PrimaryParser() {
         if (!E) {
             return 0;
         }
+        
+        if (CurToken == token_double || CurToken == '(') {
+            LogError("expression not reconized");
+            return 0;
+        }
     }
     
     //  num ::= (E)
@@ -393,12 +411,22 @@ double PrimaryParser() {
         if (!E) {
             return 0;
         }
+        
+        if (CurToken == token_double || CurToken == '(') {
+            LogError("expression not reconized");
+            return 0;
+        }
     }
 
     // num ::= num. ('+' E)?
     if (CurToken == token_double) { 
         getNextToken(); // eat double 
         E = ParserDoub();
+
+        if (CurToken == token_double || CurToken == '(') {
+            LogError("expression not reconized");
+            return 0;
+        }
     }
     
     // num ::= E. ('+' E)?
@@ -463,7 +491,7 @@ int main() {
     Precedence['/'] = 20;
     Precedence['*'] = 20; 
         
-    Expr = "-2";
+    Expr = "2";
     Result();
 
     return 0;
