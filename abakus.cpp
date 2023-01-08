@@ -313,6 +313,7 @@ OperationDoubAST* ParserParenExpr() {
             if (CurToken == ')'){
                 getNextToken(); // eat ')'
                 E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+                delete E->RHS;
                 return E;
             }
             
@@ -422,6 +423,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
         // E ::= .
         if (CurToken == token_eol) {
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+            delete E->RHS;
             return E;
         }
         
@@ -429,6 +431,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
         if (CurToken == ')') {
             //getNextToken(); // eat ')'
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+            delete E->RHS;
             return E;
         }
 
@@ -436,6 +439,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
         if (Precedence[CurToken]) {
             if (Precedence[E->Op] >= Precedence[CurToken]) {
                 E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+                delete E->RHS;
                 return E;
             }
             
@@ -449,6 +453,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
                 return nullptr;
             }
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
+            delete E->RHS;
             return E;
         }
     }
@@ -520,11 +525,13 @@ double PrimaryParser() {
             // Reduce to the left side
             // num ::= num. 
             if (CurToken == token_eol) {
-                return Reduce(E->Op, E->LHS, E->RHS->LHS);
+                double res = Reduce(E->Op, E->LHS, E->RHS->LHS);
+                return res;
             }
             // num ::= num. ('+' E)?
             E->LHS = Reduce(E->Op, E->LHS, E->RHS->LHS);
-            
+            delete E->RHS;
+
             // Update the tokens
             // num ::= num ('+'. E)?
             E->Op = CurToken;
@@ -566,7 +573,7 @@ int main() {
     Precedence['/'] = 20;
     Precedence['*'] = 20;
         
-    Expr = "14>=15";
+    Expr = "12*123-(15+1231-23.4)+23.1-12.7/1.5+1.1-(-(23)+(3-(4+(4))))";
     Result();
 
     return 0;
