@@ -26,6 +26,12 @@ enum Token {
 
     // Token for Numbers
     token_double = -3,
+
+    // Token for comparative operators
+    token_equal = -11,
+    token_diff = -12,
+    token_gqual = -13,
+    token_lqual = -14
 };
 
 // Verify the end of line 
@@ -83,21 +89,46 @@ int Tokenizer() {
         return token_double;
     }
     
+    // Verify the comparion operators
+    // ==
     if (Expr[iE] == '=') {
         iE++;
         if (Expr[iE] == '=') {
             iE++;
-            return -100;
+            return token_equal;
         }
         int Buffer = Expr[iE];
         return Buffer;
     }
 
+    // != 
     if (Expr[iE] == '!') {
         iE++;
         if (Expr[iE] == '=') {
             iE++;
-            return -101;
+            return token_diff;
+        }
+        int Buffer = Expr[iE];
+        return Buffer;
+    }
+    
+    // <=
+    if (Expr[iE] == '<') {
+        iE++;
+        if (Expr[iE] == '=') {
+            iE++;
+            return token_lqual;
+        }
+        int Buffer = Expr[iE];
+        return Buffer;
+    }
+
+    // >=
+    if (Expr[iE] == '>') {
+        iE++;
+        if (Expr[iE] == '=') {
+            iE++;
+            return token_gqual;
         }
         int Buffer = Expr[iE];
         return Buffer;
@@ -168,11 +199,17 @@ double Reduce(char S, double L, double R) {
     if (S == '<') {
         return L < R;
     }
-    if (S == -100) {
+    if (S == token_equal) {
         return L == R;
     }
-    if (S == -101) {
+    if (S == token_diff) {
         return L != R;
+    }
+    if (S == token_lqual) {
+        return L <= R;
+    }
+    if (S == token_gqual) {
+        return L >= R;
     }
 
     // Error Handling
@@ -518,16 +555,18 @@ void Result() {
 int main() {
     // Defines the operators and its precedences
     // 1 is the lowest.
-    Precedence[-100] = 5; // Precedence of '=='
-    Precedence[-101] = 5; // Precedence of '!=' 
+    Precedence[token_equal] = 5; // Precedence of '=='
+    Precedence[token_diff] = 5;  // Precedence of '!='
+    Precedence[token_gqual] = 5; // Precedence of '>='
+    Precedence[token_lqual] = 5; // Precedence of '<='
     Precedence['>'] = 5;
     Precedence['<'] = 5;
     Precedence['+'] = 10;
     Precedence['-'] = 10;
     Precedence['/'] = 20;
-    Precedence['*'] = 20; 
+    Precedence['*'] = 20;
         
-    Expr = "14-  123  * 2 - (2) != (2*3-(2*3)-(4)-(13))";
+    Expr = "14>=15";
     Result();
 
     return 0;
