@@ -83,6 +83,26 @@ int Tokenizer() {
         return token_double;
     }
     
+    if (Expr[iE] == '=') {
+        iE++;
+        if (Expr[iE] == '=') {
+            iE++;
+            return -100;
+        }
+        int Buffer = Expr[iE];
+        return Buffer;
+    }
+
+    if (Expr[iE] == '!') {
+        iE++;
+        if (Expr[iE] == '=') {
+            iE++;
+            return -101;
+        }
+        int Buffer = Expr[iE];
+        return Buffer;
+    }
+
     // If everything fails return the character
     int Buffer = Expr[iE];
     iE++;
@@ -142,7 +162,19 @@ double Reduce(char S, double L, double R) {
     if (S == '/') {
         return L / R;
     }
-    
+    if (S == '>') {
+        return L > R;
+    }
+    if (S == '<') {
+        return L < R;
+    }
+    if (S == -100) {
+        return L == R;
+    }
+    if (S == -101) {
+        return L != R;
+    }
+
     // Error Handling
     std::string Err;
     Err += "'";
@@ -260,7 +292,7 @@ OperationDoubAST* ParserParenExpr() {
                     E->RHS = ParserExpr(E->Op);
                 }
 
-                if (Precedence[CurToken] || CurToken == token_eol) {
+                if (CurToken == token_eol) {
                     return LogError("illegal instruction after '('");
                 }
 
@@ -486,12 +518,16 @@ void Result() {
 int main() {
     // Defines the operators and its precedences
     // 1 is the lowest.
+    Precedence[-100] = 5; // Precedence of '=='
+    Precedence[-101] = 5; // Precedence of '!=' 
+    Precedence['>'] = 5;
+    Precedence['<'] = 5;
     Precedence['+'] = 10;
     Precedence['-'] = 10;
     Precedence['/'] = 20;
     Precedence['*'] = 20; 
         
-    Expr = "2";
+    Expr = "14-  123  * 2 - (2) != (2*3-(2*3)-(4)-(13))";
     Result();
 
     return 0;
