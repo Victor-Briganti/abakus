@@ -10,21 +10,30 @@ You know its calculator just type some expression on it.
 
 ### Operations supported:
 ##### Basic arithmetic
-+ (add)
-- (subtraction)
+
+\+ (add)
+<br>
+\- (subtraction)
+<br>
 / (division)
-* (multiplication)
+<br>
+\* (multiplication)
 
 ##### Variables
 = (atribuition)
 
 ##### Comparison
 == (equal)
-!= (not equal)
->= (greater than or equal to)
-<= (less than or equal to)
-< (less than)
-> (greater than)
+<br>
+\!= (not equal)
+<br>
+\>= (greater than or equal to)
+<br>
+\<= (less than or equal to)
+<br>
+\< (less than)
+<br>
+\> (greater than)
 
 ___
 
