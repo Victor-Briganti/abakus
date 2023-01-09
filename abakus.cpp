@@ -5,7 +5,7 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <memory>
 
 // ============================================================================
@@ -18,7 +18,8 @@
 
 std::string Expr; // Expression string.
 int iE = 0;       // Expression interator.
-double NumDouble;   // Saves the double number.
+double NumDouble; // Saves the double number.
+std::string Var;  // Saves the variable name
 
 enum Token {
     // Token for End of Line 
@@ -27,6 +28,9 @@ enum Token {
     // Token for Numbers
     token_double = -3,
 
+    // Token for variables
+    token_var = -4,
+
     // Token for comparative operators
     token_equal = -11,
     token_diff = -12,
@@ -34,7 +38,6 @@ enum Token {
     token_lqual = -14
 };
 
-// Verify the end of line 
 int iseol(int c) {
     if (c == 0) {
         return 1;
@@ -58,6 +61,21 @@ int Tokenizer() {
             return token_eol;
         }
 
+    }
+    // Verify if is a variable 
+    // [A-Za-z][A-Za-z0-9_]*
+    if (isalpha(Expr[iE])) {
+        std::string Buffer;
+        Buffer += Expr[iE];
+        iE++;
+        
+        while (isalnum(Expr[iE]) || Expr[iE] == '_') {
+            Buffer += Expr[iE];
+            iE++;
+        }
+        
+        Var = Buffer;
+        return token_var;
     }
 
     // Verify if is a digit 
@@ -97,8 +115,7 @@ int Tokenizer() {
             iE++;
             return token_equal;
         }
-        int Buffer = Expr[iE];
-        return Buffer;
+        return 61; // ASCII for '='
     }
 
     // != 
@@ -108,8 +125,7 @@ int Tokenizer() {
             iE++;
             return token_diff;
         }
-        int Buffer = Expr[iE];
-        return Buffer;
+        return 33; // ASCII for '!'
     }
     
     // <=
@@ -119,8 +135,7 @@ int Tokenizer() {
             iE++;
             return token_lqual;
         }
-        int Buffer = Expr[iE];
-        return Buffer;
+        return 60; // ASCII for '<'
     }
 
     // >=
@@ -130,8 +145,7 @@ int Tokenizer() {
             iE++;
             return token_gqual;
         }
-        int Buffer = Expr[iE];
-        return Buffer;
+        return 62; // ASCII for '>'
     }
 
     // If everything fails return the character
@@ -172,12 +186,16 @@ OperationDoubAST* LogError (std::string Err) {
 // +++++++++++++++++++++++
 
 // Holds the precedence of operations.
-std::map<char,int> Precedence; 
+std::unordered_map<char,int> Precedence; 
+// Holds the variables and its values
+std::unordered_map<std::string, double> Variables;
 
 // Hold the current token
 int CurToken;
 // Update the current token
 void getNextToken() { CurToken = Tokenizer(); } 
+// Flag to determine possible error 
+int ExprError = 0;
 
 // Execute the common operations
 double Reduce(char S, double L, double R) {
@@ -259,6 +277,19 @@ OperationDoubAST* ParserMinus() {
             return E;
         }
     }
+    
+    // -E ::= var 
+    if (CurToken == token_var) {
+        if (Variables.find(Var) != Variables.end()) {
+            OperationDoubAST *E = new OperationDoubAST(-Variables[Var]);
+            return E;
+        }
+
+        ExprError = 1;
+        return LogError(Var + " was not found");
+    }
+
+    ExprError = 1;
     return LogError("illegal expression");
 }
 
@@ -274,7 +305,8 @@ OperationDoubAST* ParserParenExpr() {
             return E;
         }
 
-        if (CurToken == token_double) {
+        if (CurToken == token_double || CurToken == token_var) {
+            ExprError = 1;
             LogError("expression was not reconized");
         }
     }
@@ -284,11 +316,31 @@ OperationDoubAST* ParserParenExpr() {
         getNextToken(); // eat double
         E = ParserDoub();
 
-        if (CurToken == '(') {
+        if (CurToken == '(' || CurToken == token_var) {
+            ExprError = 1;
             LogError("expression was not reconized");
         }
     }
-   
+
+    // E ::= (var)
+    if (CurToken == token_var) {
+        getNextToken(); // eat variable
+
+        if (Variables.find(Var) == Variables.end()) {
+            ExprError = 1;
+            LogError(Var + " was not found");
+            return 0;
+        }
+        
+        E = new OperationDoubAST(Variables[Var]);
+        
+        if (CurToken == '(' || CurToken == token_double || CurToken == token_var) 
+        {
+            ExprError = 1;
+            LogError("expression was not reconized");
+        }
+    }
+
     // E ::= (E)
     if (CurToken == '(') {
         getNextToken(); // eat '('
@@ -299,7 +351,9 @@ OperationDoubAST* ParserParenExpr() {
     }
 
     // Token error
-    if (CurToken == token_double || CurToken == token_eol || CurToken == '(') {
+    if (CurToken == token_double || CurToken == token_eol || CurToken == '(' || CurToken == token_var) 
+    {
+        ExprError = 1;
         return LogError("expected a ')'");
     }
     
@@ -331,6 +385,7 @@ OperationDoubAST* ParserParenExpr() {
                 }
 
                 if (CurToken == token_eol) {
+                    ExprError = 1;
                     return LogError("illegal instruction after '('");
                 }
 
@@ -341,7 +396,24 @@ OperationDoubAST* ParserParenExpr() {
                     }
                 }
                 
-                if (CurToken == token_double || CurToken == token_eol) {
+                if (CurToken == token_var || CurToken == token_double || CurToken == token_eol) {
+                    ExprError = 1;
+                    return LogError("expected a ')'");
+                }
+
+                if (CurToken == token_var) {
+                    if (Variables.find(Var) == Variables.end()) {
+                        ExprError = 1;
+                        return LogError(Var + " was not found");
+                    }
+                    E->RHS = ParserExpr(E->Op);
+                    if (!E->RHS) {
+                        return nullptr;
+                    }
+                }
+                
+                if (CurToken == token_var || CurToken == token_double || CurToken == token_eol) {
+                    ExprError = 1;
                     return LogError("expected a ')'");
                 }
             }
@@ -362,6 +434,17 @@ OperationDoubAST* ParserExpr(char CurOp) {
         E = ParserDoub();
     }
     
+    // E ::= var. ('+' E)?
+    if (CurToken == token_var) {
+        if (Variables.find(Var) == Variables.end()) {
+            ExprError = 1;
+            LogError(Var + " was not found");
+            return E;
+        }
+        getNextToken(); // eat variable
+        E = new OperationDoubAST(Variables[Var]);
+    }
+
     // E ::= (.E) ('+' E)?
     if (CurToken == '(') {
         getNextToken(); // eat '('
@@ -383,6 +466,7 @@ OperationDoubAST* ParserExpr(char CurOp) {
     
     // Error Handling
     if (!E->LHS) {
+        ExprError = 1;
         return LogError("expected a number after operation");
     }
     
@@ -397,15 +481,24 @@ OperationDoubAST* ParserExpr(char CurOp) {
 
         // Error Handling
         if (CurToken == token_eol || Precedence[CurToken]) {
+            ExprError = 1;
             return LogError("illegal instruction");
         }
         
-        // E ::= E. ('+' E)?
+        // E ::= num. ('+' E)?
         if (CurToken == token_double){
             E->RHS = new OperationDoubAST(NumDouble);
             getNextToken(); // eat double
         }
         
+        // E ::= var. ('+' E)?
+        if (CurToken == token_var) {
+            if (Variables.find(Var) == Variables.end()) {
+                E->RHS = new OperationDoubAST(Variables[Var]);
+                getNextToken(); // eat variable
+            }
+        }
+
         // E ::= (.E)
         if(CurToken == '(') {
             getNextToken(); // eat '('
@@ -417,6 +510,12 @@ OperationDoubAST* ParserExpr(char CurOp) {
 
         // Error Handling 
         if (CurToken == token_double) {
+            ExprError = 1;
+            return LogError("expected a operation after number");
+        }
+        
+        if (CurToken == token_var) {
+            ExprError = 1;
             return LogError("expected a operation after number");
         }
         
@@ -472,8 +571,10 @@ double PrimaryParser() {
             return 0;
         }
         
-        if (CurToken == token_double || CurToken == '(') {
+        if (CurToken == token_double || CurToken == '(' || CurToken == token_var) 
+        {
             LogError("expression not reconized");
+            ExprError = 1;
             return 0;
         }
     }
@@ -486,7 +587,9 @@ double PrimaryParser() {
             return 0;
         }
         
-        if (CurToken == token_double || CurToken == '(') {
+        if (CurToken == token_double || CurToken == '(' || CurToken == token_var) 
+        {
+            ExprError = 1;
             LogError("expression not reconized");
             return 0;
         }
@@ -497,7 +600,27 @@ double PrimaryParser() {
         getNextToken(); // eat double 
         E = ParserDoub();
 
-        if (CurToken == token_double || CurToken == '(') {
+        if (CurToken == token_double || CurToken == '(' || CurToken == token_var) 
+        {
+            ExprError = 1;
+            LogError("expression not reconized");
+            return 0;
+        }
+    }
+
+    // num ::= var
+    if (CurToken == token_var) {
+        if (Variables.find(Var) == Variables.end()) {
+            ExprError = 1;
+            LogError(Var + " was not found");
+        }
+        
+        getNextToken(); // eat var 
+        E = new OperationDoubAST(Variables[Var]);
+
+        if (CurToken == token_double || CurToken == '(' || CurToken == token_var) 
+        {
+            ExprError = 1;
             LogError("expression not reconized");
             return 0;
         }
@@ -506,6 +629,7 @@ double PrimaryParser() {
     // num ::= E. ('+' E)?
     if (Precedence[CurToken]) {
         if (!E->LHS) {
+            ExprError = 1;
             LogError("illegal expression");
             return 0;
         }
@@ -542,10 +666,27 @@ double PrimaryParser() {
     // Error with expression
     if(!E) {
         LogError("expression was not reconized");
+        ExprError = 1;
         return 0;
     }
 
     return E->LHS;
+}
+
+void ParserVar() {
+    // If exist print it
+    if (Variables.find(Var) != Variables.end()) {
+        std::cout << Variables[Var] << std::endl;
+    } else {
+        getNextToken(); // eat variable
+        if (CurToken == '=') {
+            getNextToken(); // eat '='
+            double res = PrimaryParser();
+            if (!ExprError) {
+                Variables[Var] = res;
+            }
+        }
+    }
 }
 
 // Prints the result
@@ -555,7 +696,13 @@ void Result() {
         LogError("expected a expression");
     }
     if (CurToken == token_double || CurToken == '-' || CurToken == '(') {
-        std::cout << PrimaryParser() << std::endl;
+        double res = PrimaryParser();
+        if (!ExprError){
+            std::cout << res << std::endl;
+        }
+    }
+    if (CurToken == token_var) {
+        ParserVar();
     }
 }
 
@@ -572,9 +719,17 @@ int main() {
     Precedence['-'] = 10;
     Precedence['/'] = 20;
     Precedence['*'] = 20;
-        
+    
+    Expr = "a = 4";
+    Result();
+    
+    iE = 0;
     Expr = "12*123-(15+1231-23.4)+23.1-12.7/1.5+1.1-(-(23)+(3-(4+(4))))";
     Result();
 
+    iE = 0;
+    Expr = "12*123-(15+1231-23.4)+23.1-12.7/1.5+1.1-(-(23)+(3-(a+(a))))";
+    Result();
+    
     return 0;
 }
