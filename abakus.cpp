@@ -8,6 +8,10 @@
 #include <unordered_map>
 #include <memory>
 
+// GNU Readline
+#include <readline/readline.h>
+#include <readline/history.h>
+
 // ============================================================================
 // ==========                         LEXER                          ==========
 // ============================================================================
@@ -719,17 +723,22 @@ int main() {
     Precedence['-'] = 10;
     Precedence['/'] = 20;
     Precedence['*'] = 20;
-    
-    Expr = "a = 4";
-    Result();
-    
-    iE = 0;
-    Expr = "12*123-(15+1231-23.4)+23.1-12.7/1.5+1.1-(-(23)+(3-(4+(4))))";
-    Result();
 
-    iE = 0;
-    Expr = "12*123-(15+1231-23.4)+23.1-12.7/1.5+1.1-(-(23)+(3-(a+(a))))";
-    Result();
-    
+
+    char *tmp;
+    while ((tmp = readline("? ")) != 0) {
+        if (strlen(tmp) > 0 && !ExprError) {
+            add_history(tmp);
+        }
+
+        Expr = tmp;
+        Result();
+
+        ExprError = 0;
+        iE = 0;
+        
+        free(tmp);
+    }
+
     return 0;
 }
